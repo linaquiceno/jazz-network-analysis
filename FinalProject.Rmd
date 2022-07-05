@@ -1,0 +1,338 @@
+---
+title: "FinalProject"
+author: "Eduardo Herrera, Lina Quiceno"
+date: '2022-04-20'
+output: html_document
+---
+
+All Necessary Libraries
+```{r message=FALSE, warning=FALSE, include=FALSE}
+library(tidyverse)
+library(lubridate)
+library(rpart)
+library(rpart.plot)
+library(igraph)
+library(vioplot)
+library(car) # advanced scatter plots 
+library(corrplot) # plot correlations 
+library(dplyr) # data aggregates 
+library(Hmisc) # for correlation test of multiple variables 
+library(gplots) # plot means with CI
+library(dplyr)
+library(psych)
+library(plotrix)
+```
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+# clear everything out of memory
+rm(list=ls())  
+#upload the database
+infile <- "jazz.net"
+# importing .net file into R using pajek closed source package
+g <- read.graph(infile, format = "pajek")
+```
+
+
+# Exploring the dataset
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+g
+#vertices 198
+vcount(g)
+#edges 5484
+ecount(g)
+```
+Exploring how is the graph
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+#a graph has no edges for which both ends connect to a single vertex (called loops) and no pairs of vertices with more than one
+#edge between them (called multi-edges). An object with either of these properties
+#is called a multi-graph.6 A graph that is not a multi-graph is called a simple graph,
+#and its edges are referred to as proper edges.
+
+
+#Is it a simple graph?
+is_simple(g)  # FALSE ## Check whether Self_loops exist, as do multiple edges
+
+
+
+#Note that it is straightforward, and indeed not uncommon in practice, to transform
+#a multi-graph into a weighted graph, wherein each resulting proper edge is
+#equipped with a weight equal to the multiplicity of that edge in the original multigraph.
+
+g_simple <- simplify(g)
+```
+
+
+Exploring how is the graph
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#weights
+is.weighted(g) # TRUE
+E(g)$weight  #weights = 1
+
+list.vertex.attributes(g) # no attributes
+
+#Connectivity
+#A vertexv in a graph G is said to be reachable from another vertex u if there exists a walk from u to v. The graph G is said to be connected if every vertex is reachable from every other and therefore consists of only a single component
+is_connected(g) # TRUE 
+clusters(g) # 1
+
+
+#A common notion of distance between vertices on a graph is defined as the length
+#of the shortest path(s) between the vertices (which we set equal to infinity if no such
+#path exists). This distance is often referred to as geodesic distance, with ‘geodesic’
+#being another name for shortest paths. The value of the longest distance in a graph
+#is called the diameter of the graph.
+
+diameter(g) #6
+```
+Structure of the graph
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+str(g)
+```
+Neighboors
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#neighbors of vertex 1
+neighbors(g, 1)
+```
+Degree
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Similarly, two edges e1,e2 ∈ E are adjacent if joined by a common endpoint in V.
+#A vertex v ∈V is incident on an edge e ∈ E if v is an endpoint of e. From this follows
+#the notion of the degree of a vertex v, say dv, defined as the number of edges incident
+#on v.
+degree(g)
+```
+
+Plot graph
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+plot(g, vertex.size=5, vertex.label= NA, layout=layout_nicely)
+
+count_components(g, mode = c("weak")) #1
+count_components(g, mode = c("strong")) #1
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+hist(degree(g), col="lightblue", xlim=c(0, 50), xlab="Vertex Degree", ylab="Frequency", main="")
+
+hist(graph.strength(g), col="pink", xlab="Vertex Strength", ylab="Frequency", main="")
+
+d.jazz <- graph.strength(g)
+dd.jazz <- degree.distribution(g)
+d <- 1:max(d.jazz)-1
+ind <- (dd.jazz != 0)
+plot(d[ind], dd.jazz[ind], log="xy", col="blue",
+xlab=c("Log-Degree"), ylab=c("Log-Intensity"),
+ main="Log-Log Degree Distribution")
+
+```
+
+# Centrality  measures
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+##Betweeness centrality calculation
+betweenness <- betweenness(g, v=V(g), directed = FALSE, nobigint =TRUE, normalized = FALSE)
+V(g)$label <- round(betweenness, digits=1)
+plot(betweenness)  #plot betweenness
+
+##Distribution of Betweenness Centrality
+par(mfrow=c(1,3))
+h <- hist(betweenness, col = "red", xlab = "Node Degree", main = "Betweeness Centrality")
+xfit<-seq(min(betweenness),max(betweenness),length=40)
+yfit<-dnorm(xfit,mean=mean(betweenness),sd=sd(betweenness))
+yfit <- yfit * diff(h$mids[1:2])*length(betweenness)
+lines(xfit, yfit, col="black", lwd=2)
+
+#Degree Centrality
+DegreeCentrality <- degree(g)
+
+h <- hist(DegreeCentrality, col = "yellow", xlab = "Node Degree", main = "Degree Centrality")
+xfit<-seq(min(DegreeCentrality),max(DegreeCentrality),length=40)
+yfit<-dnorm(xfit,mean=mean(DegreeCentrality),sd=sd(DegreeCentrality))
+yfit <- yfit * diff(h$mids[1:2])*length(DegreeCentrality)
+lines(xfit, yfit, col="black", lwd=2)
+
+# Strength Centrality
+StrengthCentrality <- strength(g)
+h <- hist(StrengthCentrality, col = "blue", xlab = "Node Degree", main = "Strength Centrality")
+xfit<-seq(min(StrengthCentrality),max(StrengthCentrality),length=40)
+yfit<-dnorm(xfit,mean=mean(StrengthCentrality),sd=sd(StrengthCentrality))
+yfit <- yfit * diff(h$mids[1:2])*length(StrengthCentrality)
+lines(xfit, yfit, col="black", lwd=2)
+
+```
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# average path
+average.path.length(g) #2.235041
+
+
+dd.g <- degree_distribution(g)
+
+d <- 1:max(DegreeCentrality)-1
+ind <- (dd.g != 0)
+plot(d[ind], dd.g[ind], log="xy",
+     col="blue",
+     xlab=c("Log-Degree"), ylab=c("Log-
+Intensity"),
+     main="Log-Log Degree Distribution")
+```
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Ploting closeness Centrality
+A <- get.adjacency(g,sparse=FALSE)
+library(network)
+n <- network::as.network.matrix(A)
+library(sna)
+sna::gplot.target(n, closeness(n),
+main="Closeness",
+circ.lab = FALSE, circ.col="skyblue",
+usearrows = FALSE,
+vertex.col=c("blue", rep("red", 32), "yellow"), edge.col="darkgray")
+
+#Ploting Betweness Centraility
+sna::gplot.target(n, betweenness(n),
+main="Betweenness",
+circ.lab = FALSE, circ.col="skyblue",
+usearrows = FALSE,
+vertex.col=c("blue", rep("red", 32),
+"yellow"),
+edge.col="darkgray")
+
+#Eigenvector centrality
+sna::gplot.target(n, evcent(n),
+main="Eigenvector centrality",
+circ.lab = FALSE, circ.col="skyblue",
+usearrows = FALSE,
+vertex.col=c("blue", rep("red", 32),
+"yellow"),
+edge.col="darkgray")
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Ploting closeness Centrality
+A <- get.adjacency(g,sparse=FALSE)
+library(network)
+n <- network::as.network.matrix(A)
+library(sna)
+sna::gplot.target(n, degree(n),
+main="Degree",
+circ.lab = FALSE, circ.col="skyblue",
+usearrows = FALSE,
+vertex.col=c("blue", rep("red", 32), "yellow"), edge.col="darkgray")
+
+```
+
+
+
+
+# Giant Component
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Calculate the maximal (weakly or strongly) connected components of a graph
+ConnectedComponents <- components(g) 
+ConnectedComponents #$csize 198 numeric vector giving the sizes of the clusters  $no numeric constant, the number of clusters 1
+```
+
+Decomposition of the graph
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+g_decompose1 <- decompose(g)
+table(sapply(g_decompose1, vcount)) # 198 1
+
+# Decomposition of the graph
+g_decompose <- decompose.graph(g)[[1]]
+
+#The vertex connectivity of two vertices (source and target) in a directed graph is 
+#the minimum number of vertices needed to remove from the graph to eliminate all (directed) 
+#paths from source to target. vertex_connectivity calculates this quantity if both the source 
+#and target arguments are given and they're not NULL.
+vertex.connectivity(g_decompose)
+#1  vertices would need to be removed to break the jazz network into multiple components
+
+#The edge connectivity of a graph or two vertices, this is recently also called group adhesion.
+
+#The edge connectivity of a pair of vertices (source and target) is the minimum number of edges 
+#needed to remove to eliminate all (directed) paths from source to target. edge_connectivity 
+#calculates this quantity if both the source and target arguments are given (and not NULL).
+edge.connectivity(g_decompose)
+#similarly it would take removing 2 Edges to decompose the graph
+
+#Transitivity measures the probability that the adjacent vertices of a vertex are connected. 
+#This is sometimes also called the clustering coefficient.
+transitivity(g_decompose, type="global") #  0.5202593 
+#"global" This is simply the ratio of the triangles and the connected triples in the graph.
+
+# Component Measures of Global Graph
+average.path.length(g_decompose) # 2.235041
+
+diameter(g_decompose) #6
+mean_distance(g_decompose) #2.235041
+transitivity(g_decompose) #0.5202593
+```
+
+# Community Analysis
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+# Cluster analysis
+#Take every combination of pairs of my friends. 
+#What  fraction of pairs of my friends are friends of each other?
+
+# Community structure detection based on edge betweenness
+#Many networks consist of modules which are densely connected themselves but sparsely connected to other modules.
+g_decompose_cluster <- edge.betweenness.community(g, weights = E(g)$weight, bridges=TRUE, membership =  TRUE)
+g_decompose_cluster #groups: 10, mod: 0.59 -> modularity score of the partitioning. how modular is a given division of a graph into subgraphs
+
+# Modularity Plot
+plot(g_decompose_cluster, g
+     , vertex.size=3, label.size=1, vertex.label = ""
+     , layout= layout_with_fr(g)
+     , mark.groups=communities(g_decompose_cluster))
+
+# Using WalkTrap Algorithm
+#this function tries to find densely connected subgraphs, also called communities 
+#in a graph via random walks. 
+#The idea is that short random walks tend to stay in the same community.
+g_walktrap <- walktrap.community(g, weights = E(g)$value, steps = 4, merges = T)
+g_walktrap
+
+```
+
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+g_simpl<-simplify(g) 
+### The above should default to the option below, to sum the existing edge weights ### when combining them
+
+# Will use the inverse of log weight for shortest path calculations
+inv_weight<-1/log(E(g_simpl)$weight  + 1)
+num_weight<-E(g_simpl)$weight 
+length(inv_weight) #2742
+
+#we check whether it is "strongly" connected (it is)
+is_connected(g_simpl, "strong") #1] TRUE
+
+plot(g_simpl, vertex.size=5, vertex.label= NA, layout=layout_nicely) 
+
+diameter(g_simpl, directed=T,weights= inv_weight) #5.461435
+diameter(g_simpl, directed=F,weights= inv_weight) #5.461435
+
+betweenness(g_simpl, directed=T,nobigint=T,normalized=T, weights= inv_weight) 
+
+closeness(g_simpl, weights= inv_weight, mode = "out")
+
+closeness(g_simpl, weights= inv_weight, mode = "in")
+
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Community Detection
+jazzfgc <- fastgreedy.community(g_simpl)
+length(jazzfgc)
+sizes(jazzfgc)
+plot(jazzfgc, g)
+
+library(ape)
+dendPlot(jazzfgc, mode="phylo")
+```
+
+
